@@ -19,7 +19,7 @@ package cache
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
 )
@@ -49,10 +49,12 @@ func (na *nodeArray) next() (nodeName string, exhausted bool) {
 		return "", false
 	}
 	if na.lastIndex >= len(na.nodes) {
+		klog.Info("Next: NodeTree exhausted")
 		return "", true
 	}
 	nodeName = na.nodes[na.lastIndex]
 	na.lastIndex++
+	klog.Infof("Next returning %#v", nodeName)
 	return nodeName, false
 }
 
@@ -64,6 +66,7 @@ func newNodeTree(nodes []*v1.Node) *nodeTree {
 	for _, n := range nodes {
 		nt.addNode(n)
 	}
+	klog.Infof("Created new node tree %#v", *nt)
 	return nt
 }
 
@@ -72,6 +75,7 @@ func newNodeTree(nodes []*v1.Node) *nodeTree {
 func (nt *nodeTree) addNode(n *v1.Node) {
 	zone := utilnode.GetZoneKey(n)
 	if na, ok := nt.tree[zone]; ok {
+		klog.Infof("Adding node %v from zone %v. original node list: %#v", n.Name, zone, na.nodes)
 		for _, nodeName := range na.nodes {
 			if nodeName == n.Name {
 				klog.Warningf("node %q already exist in the NodeTree", n.Name)
@@ -80,10 +84,12 @@ func (nt *nodeTree) addNode(n *v1.Node) {
 		}
 		na.nodes = append(na.nodes, n.Name)
 	} else {
+		klog.Infof("Adding node %v from zone %v. original node list: empty", n.Name, zone)
 		nt.zones = append(nt.zones, zone)
 		nt.tree[zone] = &nodeArray{nodes: []string{n.Name}, lastIndex: 0}
 	}
 	klog.V(2).Infof("Added node %q in group %q to NodeTree", n.Name, zone)
+	klog.Infof("Added node %v from zone %v. updated node list: %#v", n.Name, zone, nt.tree[zone].nodes)
 	nt.numNodes++
 }
 
@@ -91,6 +97,7 @@ func (nt *nodeTree) addNode(n *v1.Node) {
 func (nt *nodeTree) removeNode(n *v1.Node) error {
 	zone := utilnode.GetZoneKey(n)
 	if na, ok := nt.tree[zone]; ok {
+		klog.Infof("Removing node %v from zone %v. original node list: %#v", n.Name, zone, na.nodes)
 		for i, nodeName := range na.nodes {
 			if nodeName == n.Name {
 				na.nodes = append(na.nodes[:i], na.nodes[i+1:]...)
@@ -99,6 +106,7 @@ func (nt *nodeTree) removeNode(n *v1.Node) error {
 				}
 				klog.V(2).Infof("Removed node %q in group %q from NodeTree", n.Name, zone)
 				nt.numNodes--
+				klog.Infof("Removed node %v from zone %v. updated list: %#v", n.Name, zone, na.nodes)
 				return nil
 			}
 		}
@@ -145,6 +153,7 @@ func (nt *nodeTree) resetExhausted() {
 // next returns the name of the next node. NodeTree iterates over zones and in each zone iterates
 // over nodes in a round robin fashion.
 func (nt *nodeTree) next() string {
+	klog.Info("Looking for the next node")
 	if len(nt.zones) == 0 {
 		return ""
 	}
@@ -154,6 +163,7 @@ func (nt *nodeTree) next() string {
 			nt.zoneIndex = 0
 		}
 		zone := nt.zones[nt.zoneIndex]
+		klog.Infof("Checking zone %v, node list : %#v", zone, nt.tree[zone].nodes)
 		nt.zoneIndex++
 		// We do not check the exhausted zones before calling next() on the zone. This ensures
 		// that if more nodes are added to a zone after it is exhausted, we iterate over the new nodes.
@@ -161,9 +171,11 @@ func (nt *nodeTree) next() string {
 		if exhausted {
 			numExhaustedZones++
 			if numExhaustedZones >= len(nt.zones) { // all zones are exhausted. we should reset.
+				klog.Infof("Reseting")
 				nt.resetExhausted()
 			}
 		} else {
+			klog.Infof("Found %v", nodeName)
 			return nodeName
 		}
 	}

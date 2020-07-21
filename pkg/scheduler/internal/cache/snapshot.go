@@ -22,6 +22,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog"
 	schedulerlisters "k8s.io/kubernetes/pkg/scheduler/listers"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 )
@@ -63,7 +64,7 @@ func NewSnapshot(pods []*v1.Pod, nodes []*v1.Node) *Snapshot {
 	s.nodeInfoMap = nodeInfoMap
 	s.nodeInfoList = nodeInfoList
 	s.havePodsWithAffinityNodeInfoList = havePodsWithAffinityNodeInfoList
-
+	klog.Infof("NodeInfoList %#v", nodeInfoList)
 	return s
 }
 
@@ -89,6 +90,7 @@ func createNodeInfoMap(pods []*v1.Pod, nodes []*v1.Node) map[string]*schedulerno
 		nodeInfo.SetNode(node)
 		nodeInfo.SetImageStates(getNodeImageStates(node, imageExistenceMap))
 	}
+	klog.Infof("NodeInfoMap %#v", nodeNameToInfo)
 	return nodeNameToInfo
 }
 
