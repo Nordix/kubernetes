@@ -2046,6 +2046,12 @@ func (proxier *Proxier) syncEndpoint(svcPortName proxy.ServicePortName, onlyNode
 		newEndpoints.Insert(epInfo.String())
 	}
 
+	if len(newEndpoints) == 0 && onlyNodeLocalEndpoints {
+		for _, epInfo := range proxier.endpointsMap[svcPortName] {
+			newEndpoints.Insert(epInfo.String())
+		}
+	}
+
 	// Create new endpoints
 	for _, ep := range newEndpoints.List() {
 		ip, port, err := net.SplitHostPort(ep)
