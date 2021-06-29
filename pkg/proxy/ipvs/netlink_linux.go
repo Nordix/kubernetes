@@ -23,6 +23,7 @@ import (
 	"net"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilnet "k8s.io/utils/net"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -123,7 +124,11 @@ func (h *netlinkHandle) ListBindAddress(devName string) ([]string, error) {
 	return ips, nil
 }
 
-// GetLocalAddresses lists all LOCAL type IP addresses from host based on filter device.
+// GetLocalAddresses return addresses for interfaces in two ways;
+//  1. dev != "" && filterDev == ""; Return addresses for `dev`
+//  2. dev == "" && filterDev != ""; Return addresses for all interfaces *except* filterDev
+// Other combinations of dev and filterDev are forbidden.
+// IPv6 link-local addresses are excluded.
 // If dev is not specified, it's equivalent to exec:
 // $ ip route show table local type local proto kernel
 // 10.0.0.1 dev kube-ipvs0  scope host  src 10.0.0.1
@@ -143,52 +148,63 @@ func (h *netlinkHandle) ListBindAddress(devName string) ([]string, error) {
 // 10.0.0.10  scope host  src 10.0.0.10
 // Then cut the unique src IP fields,
 // --> result set: [10.0.0.1, 10.0.0.10]
-
-// If filterDev is specified, the result will discard route of specified device and cut src from other routes.
 func (h *netlinkHandle) GetLocalAddresses(dev, filterDev string) (sets.String, error) {
-	chosenLinkIndex, filterLinkIndex := -1, -1
 	if dev != "" {
-		link, err := h.LinkByName(dev)
-		if err != nil {
-			return nil, fmt.Errorf("error get device %s, err: %v", dev, err)
+		if filterDev != "" {
+			return nil, fmt.Errorf("Invalid argument")
 		}
-		chosenLinkIndex = link.Attrs().Index
-	} else if filterDev != "" {
-		link, err := h.LinkByName(filterDev)
-		if err != nil {
-			return nil, fmt.Errorf("error get filter device %s, err: %v", filterDev, err)
-		}
-		filterLinkIndex = link.Attrs().Index
+		return h.getLocalAddressesDev(dev)
 	}
 
-	routeFilter := &netlink.Route{
-		Table:    unix.RT_TABLE_LOCAL,
-		Type:     unix.RTN_LOCAL,
-		Protocol: unix.RTPROT_KERNEL,
+	if filterDev == "" {
+		return nil, fmt.Errorf("Invalid argument")
 	}
-	filterMask := netlink.RT_FILTER_TABLE | netlink.RT_FILTER_TYPE | netlink.RT_FILTER_PROTOCOL
 
-	// find chosen device
-	if chosenLinkIndex != -1 {
-		routeFilter.LinkIndex = chosenLinkIndex
-		filterMask |= netlink.RT_FILTER_OIF
-	}
-	routes, err := h.RouteListFiltered(netlink.FAMILY_ALL, routeFilter, filterMask)
+	addr, err := net.InterfaceAddrs()
 	if err != nil {
-		return nil, fmt.Errorf("error list route table, err: %v", err)
+		return nil, fmt.Errorf("Could not get addresses: %v", err)
 	}
-	res := sets.NewString()
-	for _, route := range routes {
-		if route.LinkIndex == filterLinkIndex {
+	allIps := sets.NewString()
+	h.appendAddresses(allIps, addr)
+
+	filterIps, err := h.getLocalAddressesDev(filterDev)
+	if err != nil {
+		return nil, err
+	}
+
+	return allIps.Difference(filterIps), nil
+}
+func (h *netlinkHandle) getLocalAddressesDev(dev string) (sets.String, error) {
+	ifi, err := net.InterfaceByName(dev)
+	if err != nil {
+		return nil, fmt.Errorf("Could not get interface %s: %v", dev, err)
+	}
+	ips := sets.NewString()
+	addr, err := ifi.Addrs()
+	if err != nil {
+		return nil, fmt.Errorf("Can't get addresses from %s: %v", ifi.Name, err)
+	}
+	h.appendAddresses(ips, addr)
+	return ips, nil
+}
+
+func (h *netlinkHandle) appendAddresses(ips sets.String, addr []net.Addr) {
+	for _, a := range addr {
+		var ip net.IP
+		switch v := a.(type) {
+		case *net.IPAddr:
+			ip = v.IP
+		case *net.IPNet:
+			ip = v.IP
+		default:
 			continue
 		}
-		if h.isIPv6 {
-			if route.Dst.IP.To4() == nil && !route.Dst.IP.IsLinkLocalUnicast() {
-				res.Insert(route.Dst.IP.String())
-			}
-		} else if route.Src != nil {
-			res.Insert(route.Src.String())
+		if h.isIPv6 != utilnet.IsIPv6(ip) {
+			continue
 		}
+		if h.isIPv6 && ip.IsLinkLocalUnicast() {
+			continue
+		}
+		ips.Insert(ip.String())
 	}
-	return res, nil
 }
