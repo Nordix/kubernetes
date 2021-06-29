@@ -1383,6 +1383,15 @@ func TestAddressSet(t *testing.T) {
 			sets.NewString("8.8.8.8", "1000::"),
 		},
 		{
+			"Accept IPNet x 2",
+			binaryValidator(true),
+			[]net.Addr{
+				mustParseIPNet("8.8.8.8/32"),
+				mustParseIPNet("1000::/128"),
+			},
+			sets.NewString("8.8.8.8", "1000::"),
+		},
+		{
 			"Accept Unix x 2",
 			binaryValidator(true),
 			[]net.Addr{
