@@ -256,6 +256,29 @@ func GetNodeAddresses(cidrs []string, nw NetworkInterfacer) (sets.String, error)
 	return uniqueAddressList, nil
 }
 
+type IpSetValidator interface {
+	IpIsValidForSet(ip net.IP) bool
+}
+
+func AddressSet(validator IpSetValidator, addrs []net.Addr) sets.String {
+	ips := sets.NewString()
+	for _, a := range addrs {
+		var ip net.IP
+		switch v := a.(type) {
+		case *net.IPAddr:
+			ip = v.IP
+		case *net.IPNet:
+			ip = v.IP
+		default:
+			continue
+		}
+		if validator.IpIsValidForSet(ip) {
+			ips.Insert(ip.String())
+		}
+	}
+	return ips
+}
+
 // LogAndEmitIncorrectIPVersionEvent logs and emits incorrect IP version event.
 func LogAndEmitIncorrectIPVersionEvent(recorder record.EventRecorder, fieldName, fieldValue, svcNamespace, svcName string, svcUID types.UID) {
 	errMsg := fmt.Sprintf("%s in %s has incorrect IP version", fieldValue, fieldName)

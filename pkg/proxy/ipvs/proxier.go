@@ -304,16 +304,21 @@ type realIPGetter struct {
 // Note that loopback addresses are excluded.
 func (r *realIPGetter) NodeIPs() (ips []net.IP, err error) {
 	// Pass in empty filter device name for list all LOCAL type addresses.
-	nodeAddress, err := r.nl.GetLocalAddresses("", DefaultDummyDevice)
+	nodeAddress, err := r.nl.GetAllLocalAddresses()
 	if err != nil {
 		return nil, fmt.Errorf("error listing LOCAL type addresses from host, error: %v", err)
 	}
+
+	// We must exclude the addresses on the IPVS dummy interface
+	bindedAddress, err := r.BindedIPs()
+	if err != nil {
+		return nil, err
+	}
+	ipset := nodeAddress.Difference(bindedAddress)
+
 	// translate ip string to IP
-	for _, ipStr := range nodeAddress.UnsortedList() {
+	for _, ipStr := range ipset.UnsortedList() {
 		a := net.ParseIP(ipStr)
-		if a.IsLoopback() {
-			continue
-		}
 		ips = append(ips, a)
 	}
 	return ips, nil
@@ -321,7 +326,7 @@ func (r *realIPGetter) NodeIPs() (ips []net.IP, err error) {
 
 // BindedIPs returns all addresses that are binded to the IPVS dummy interface kube-ipvs0
 func (r *realIPGetter) BindedIPs() (sets.String, error) {
-	return r.nl.GetLocalAddresses(DefaultDummyDevice, "")
+	return r.nl.GetLocalAddresses(DefaultDummyDevice)
 }
 
 // Proxier implements proxy.Provider

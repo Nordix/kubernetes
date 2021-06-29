@@ -1307,3 +1307,115 @@ func randSeq() string {
 	}
 	return string(b)
 }
+
+func mustParseIPAddr(str string) net.Addr {
+	a, err := net.ResolveIPAddr("ip", str)
+	if err != nil {
+		panic("mustParseIPAddr")
+	}
+	return a
+}
+func mustParseIPNet(str string) net.Addr {
+	_, n, err := net.ParseCIDR(str)
+	if err != nil {
+		panic("mustParseIPNet")
+	}
+	return n
+}
+func mustParseUnix(str string) net.Addr {
+	n, err := net.ResolveUnixAddr("unix", str)
+	if err != nil {
+		panic("mustParseUnix")
+	}
+	return n
+}
+
+type binaryValidator bool
+
+func (v binaryValidator) IpIsValidForSet(ip net.IP) bool {
+	return bool(v)
+}
+
+type cidrValidator struct {
+	cidr *net.IPNet
+}
+
+func (v *cidrValidator) IpIsValidForSet(ip net.IP) bool {
+	return v.cidr.Contains(ip)
+}
+func newCidrValidator(cidr string) *cidrValidator {
+	_, n, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic("mustParseIPNet")
+	}
+	return &cidrValidator{n}
+}
+
+func TestAddressSet(t *testing.T) {
+	testCases := []struct {
+		name      string
+		validator IpSetValidator
+		input     []net.Addr
+		expected  sets.String
+	}{
+		{
+			"Empty",
+			binaryValidator(false),
+			nil,
+			sets.NewString(),
+		},
+		{
+			"Reject IPAddr x 2",
+			binaryValidator(false),
+			[]net.Addr{
+				mustParseIPAddr("8.8.8.8"),
+				mustParseIPAddr("1000::"),
+			},
+			sets.NewString(),
+		},
+		{
+			"Accept IPAddr x 2",
+			binaryValidator(true),
+			[]net.Addr{
+				mustParseIPAddr("8.8.8.8"),
+				mustParseIPAddr("1000::"),
+			},
+			sets.NewString("8.8.8.8", "1000::"),
+		},
+		{
+			"Accept Unix x 2",
+			binaryValidator(true),
+			[]net.Addr{
+				mustParseUnix("/tmp/sock1"),
+				mustParseUnix("/tmp/sock2"),
+			},
+			sets.NewString(),
+		},
+		{
+			"Cidr IPv4",
+			newCidrValidator("192.168.1.0/24"),
+			[]net.Addr{
+				mustParseIPAddr("8.8.8.8"),
+				mustParseIPAddr("1000::"),
+				mustParseIPAddr("192.168.1.1"),
+			},
+			sets.NewString("192.168.1.1"),
+		},
+		{
+			"Cidr IPv6",
+			newCidrValidator("1000::/64"),
+			[]net.Addr{
+				mustParseIPAddr("8.8.8.8"),
+				mustParseIPAddr("1000::"),
+				mustParseIPAddr("192.168.1.1"),
+			},
+			sets.NewString("1000::"),
+		},
+	}
+
+	for _, tc := range testCases {
+		if !tc.expected.Equal(AddressSet(tc.validator, tc.input)) {
+			t.Errorf("%s", tc.name)
+		}
+	}
+}

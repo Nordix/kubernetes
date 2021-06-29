@@ -20,8 +20,10 @@ package ipvs
 
 import (
 	"fmt"
+	"net"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilnet "k8s.io/utils/net"
 )
 
 type emptyHandle struct {
@@ -57,7 +59,30 @@ func (h *emptyHandle) ListBindAddress(devName string) ([]string, error) {
 	return nil, fmt.Errorf("netlink is not supported in this platform")
 }
 
-// GetLocalAddresses is part of interface.
-func (h *emptyHandle) GetLocalAddresses(dev, filterDev string) (sets.String, error) {
+// GetAllLocalAddresses is part of interface.
+func (h *emptyHandle) GetAllLocalAddresses() (sets.String, error) {
 	return nil, fmt.Errorf("netlink is not supported in this platform")
+}
+
+// GetLocalAddresses is part of interface.
+func (h *emptyHandle) GetLocalAddresses(dev string) (sets.String, error) {
+	return nil, fmt.Errorf("netlink is not supported in this platform")
+}
+
+// For verify-typecheck.sh
+type familyValidator struct {
+	isIPv6 bool
+}
+
+func (h *familyValidator) IpIsValidForSet(ip net.IP) bool {
+	if h.isIPv6 != utilnet.IsIPv6(ip) {
+		return false
+	}
+	if h.isIPv6 && ip.IsLinkLocalUnicast() {
+		return false
+	}
+	if ip.IsLoopback() {
+		return false
+	}
+	return true
 }

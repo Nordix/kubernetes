@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	//utilproxy "k8s.io/kubernetes/pkg/proxy/util"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/proxy"
@@ -390,15 +391,10 @@ func TestGetNodeIPs(t *testing.T) {
 		devAddresses map[string][]string
 		expectIPs    []string
 	}{
-		// case 0
-		{
-			devAddresses: map[string][]string{"eth0": {"1.2.3.4"}, "lo": {"127.0.0.1"}},
-			expectIPs:    []string{"1.2.3.4"},
-		},
 		// case 1
 		{
-			devAddresses: map[string][]string{"lo": {"127.0.0.1"}},
-			expectIPs:    []string{},
+			devAddresses: map[string][]string{"eth0": {"1.2.3.4"}},
+			expectIPs:    []string{"1.2.3.4"},
 		},
 		// case 2
 		{
@@ -407,22 +403,22 @@ func TestGetNodeIPs(t *testing.T) {
 		},
 		// case 3
 		{
-			devAddresses: map[string][]string{"encap0": {"10.20.30.40"}, "lo": {"127.0.0.1"}, "docker0": {"172.17.0.1"}},
+			devAddresses: map[string][]string{"encap0": {"10.20.30.40"}, "docker0": {"172.17.0.1"}},
 			expectIPs:    []string{"10.20.30.40", "172.17.0.1"},
 		},
 		// case 4
 		{
-			devAddresses: map[string][]string{"encaps9": {"10.20.30.40"}, "lo": {"127.0.0.1"}, "encap7": {"10.20.30.31"}},
+			devAddresses: map[string][]string{"encaps9": {"10.20.30.40"}, "encap7": {"10.20.30.31"}},
 			expectIPs:    []string{"10.20.30.40", "10.20.30.31"},
 		},
 		// case 5
 		{
-			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4"}, "lo": {"127.0.0.1"}, "encap7": {"10.20.30.31"}},
+			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4"}, "encap7": {"10.20.30.31"}},
 			expectIPs:    []string{"10.20.30.31"},
 		},
 		// case 6
 		{
-			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4", "2.3.4.5"}, "lo": {"127.0.0.1"}},
+			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4", "2.3.4.5"}},
 			expectIPs:    []string{},
 		},
 		// case 7
@@ -432,12 +428,12 @@ func TestGetNodeIPs(t *testing.T) {
 		},
 		// case 8
 		{
-			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4", "2.3.4.5"}, "eth5": {"3.4.5.6"}, "lo": {"127.0.0.1"}},
+			devAddresses: map[string][]string{"kube-ipvs0": {"1.2.3.4", "2.3.4.5"}, "eth5": {"3.4.5.6"}},
 			expectIPs:    []string{"3.4.5.6"},
 		},
 		// case 9
 		{
-			devAddresses: map[string][]string{"ipvs0": {"1.2.3.4"}, "lo": {"127.0.0.1"}, "encap7": {"10.20.30.31"}},
+			devAddresses: map[string][]string{"ipvs0": {"1.2.3.4"}, "encap7": {"10.20.30.31"}},
 			expectIPs:    []string{"10.20.30.31", "1.2.3.4"},
 		},
 	}
@@ -5287,4 +5283,94 @@ func Test_EndpointSliceOnlyReadyAndTerminatingLocalWithFeatureGateDisabled(t *te
 	realServers2, rsErr2 = ipvs.GetRealServers(externalIPServer)
 	assert.Nil(t, rsErr2, "Expected no error getting real servers")
 	assert.Len(t, realServers2, 0, "Expected 0 real servers")
+}
+
+func TestIpIsValidForSet(t *testing.T) {
+	testCases := []struct {
+		isIPv6 bool
+		ip     string
+		res    bool
+	}{
+		{
+			false,
+			"127.0.0.1",
+			false,
+		},
+		{
+			false,
+			"127.0.0.0",
+			false,
+		},
+		{
+			false,
+			"127.6.7.8",
+			false,
+		},
+		{
+			false,
+			"8.8.8.8",
+			true,
+		},
+		{
+			false,
+			"192.168.0.1",
+			true,
+		},
+		{
+			false,
+			"169.254.0.0",
+			true,
+		},
+		{
+			false,
+			"::ffff:169.254.0.0", // IPv6 mapped IPv4
+			true,
+		},
+		{
+			false,
+			"1000::",
+			false,
+		},
+		// IPv6
+		{
+			true,
+			"::1",
+			false,
+		},
+		{
+			true,
+			"1000::",
+			true,
+		},
+		{
+			true,
+			"fe80::200:ff:fe01:1",
+			false,
+		},
+		{
+			true,
+			"8.8.8.8",
+			false,
+		},
+		{
+			true,
+			"::ffff:8.8.8.8",
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		v := &familyValidator{tc.isIPv6}
+		ip := net.ParseIP(tc.ip)
+		if ip == nil {
+			t.Errorf("Parse error: %s", tc.ip)
+		}
+		if v.IpIsValidForSet(ip) != tc.res {
+			if tc.isIPv6 {
+				t.Errorf("IPv6: %s", tc.ip)
+			} else {
+				t.Errorf("IPv4: %s", tc.ip)
+			}
+		}
+	}
 }

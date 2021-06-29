@@ -23,6 +23,7 @@ import (
 	"net"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilproxy "k8s.io/kubernetes/pkg/proxy/util"
 	utilnet "k8s.io/utils/net"
 
 	"github.com/vishvananda/netlink"
@@ -124,87 +125,45 @@ func (h *netlinkHandle) ListBindAddress(devName string) ([]string, error) {
 	return ips, nil
 }
 
-// GetLocalAddresses return addresses for interfaces in two ways;
-//  1. dev != "" && filterDev == ""; Return addresses for `dev`
-//  2. dev == "" && filterDev != ""; Return addresses for all interfaces *except* filterDev
-// Other combinations of dev and filterDev are forbidden.
+type familyValidator struct {
+	isIPv6 bool
+}
+
+// GetAllLocalAddresses return all local addresses on the node.
+// Only the addresses of the current family are returned.
 // IPv6 link-local addresses are excluded.
-// If dev is not specified, it's equivalent to exec:
-// $ ip route show table local type local proto kernel
-// 10.0.0.1 dev kube-ipvs0  scope host  src 10.0.0.1
-// 10.0.0.10 dev kube-ipvs0  scope host  src 10.0.0.10
-// 10.0.0.252 dev kube-ipvs0  scope host  src 10.0.0.252
-// 100.106.89.164 dev eth0  scope host  src 100.106.89.164
-// 127.0.0.0/8 dev lo  scope host  src 127.0.0.1
-// 127.0.0.1 dev lo  scope host  src 127.0.0.1
-// 172.17.0.1 dev docker0  scope host  src 172.17.0.1
-// 192.168.122.1 dev virbr0  scope host  src 192.168.122.1
-// Then cut the unique src IP fields,
-// --> result set: [10.0.0.1, 10.0.0.10, 10.0.0.252, 100.106.89.164, 127.0.0.1, 172.17.0.1, 192.168.122.1]
-
-// If dev is specified, it's equivalent to exec:
-// $ ip route show table local type local proto kernel dev kube-ipvs0
-// 10.0.0.1  scope host  src 10.0.0.1
-// 10.0.0.10  scope host  src 10.0.0.10
-// Then cut the unique src IP fields,
-// --> result set: [10.0.0.1, 10.0.0.10]
-func (h *netlinkHandle) GetLocalAddresses(dev, filterDev string) (sets.String, error) {
-	if dev != "" {
-		if filterDev != "" {
-			return nil, fmt.Errorf("Invalid argument")
-		}
-		return h.getLocalAddressesDev(dev)
-	}
-
-	if filterDev == "" {
-		return nil, fmt.Errorf("Invalid argument")
-	}
-
+func (h *netlinkHandle) GetAllLocalAddresses() (sets.String, error) {
 	addr, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil, fmt.Errorf("Could not get addresses: %v", err)
 	}
-	allIps := sets.NewString()
-	h.appendAddresses(allIps, addr)
-
-	filterIps, err := h.getLocalAddressesDev(filterDev)
-	if err != nil {
-		return nil, err
-	}
-
-	return allIps.Difference(filterIps), nil
+	return utilproxy.AddressSet(&familyValidator{h.isIPv6}, addr), nil
 }
-func (h *netlinkHandle) getLocalAddressesDev(dev string) (sets.String, error) {
+
+// GetLocalAddresses return all local addresses for an interface.
+// Only the addresses of the current family are returned.
+// IPv6 link-local addresses are excluded.
+func (h *netlinkHandle) GetLocalAddresses(dev string) (sets.String, error) {
 	ifi, err := net.InterfaceByName(dev)
 	if err != nil {
 		return nil, fmt.Errorf("Could not get interface %s: %v", dev, err)
 	}
-	ips := sets.NewString()
 	addr, err := ifi.Addrs()
 	if err != nil {
 		return nil, fmt.Errorf("Can't get addresses from %s: %v", ifi.Name, err)
 	}
-	h.appendAddresses(ips, addr)
-	return ips, nil
+	return utilproxy.AddressSet(&familyValidator{h.isIPv6}, addr), nil
 }
 
-func (h *netlinkHandle) appendAddresses(ips sets.String, addr []net.Addr) {
-	for _, a := range addr {
-		var ip net.IP
-		switch v := a.(type) {
-		case *net.IPAddr:
-			ip = v.IP
-		case *net.IPNet:
-			ip = v.IP
-		default:
-			continue
-		}
-		if h.isIPv6 != utilnet.IsIPv6(ip) {
-			continue
-		}
-		if h.isIPv6 && ip.IsLinkLocalUnicast() {
-			continue
-		}
-		ips.Insert(ip.String())
+func (h *familyValidator) IpIsValidForSet(ip net.IP) bool {
+	if h.isIPv6 != utilnet.IsIPv6(ip) {
+		return false
 	}
+	if h.isIPv6 && ip.IsLinkLocalUnicast() {
+		return false
+	}
+	if ip.IsLoopback() {
+		return false
+	}
+	return true
 }

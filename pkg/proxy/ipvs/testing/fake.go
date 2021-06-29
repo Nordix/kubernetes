@@ -112,20 +112,18 @@ func (h *FakeNetlinkHandle) ListBindAddress(devName string) ([]string, error) {
 }
 
 // GetLocalAddresses is a mock implementation
-func (h *FakeNetlinkHandle) GetLocalAddresses(dev, filterDev string) (sets.String, error) {
+func (h *FakeNetlinkHandle) GetLocalAddresses(dev string) (sets.String, error) {
 	res := sets.NewString()
-	if len(dev) != 0 {
-		// list all addresses from a given network interface.
-		for _, addr := range h.localAddresses[dev] {
-			res.Insert(addr)
-		}
-		return res, nil
+	// list all addresses from a given network interface.
+	for _, addr := range h.localAddresses[dev] {
+		res.Insert(addr)
 	}
-	// If filterDev is not given, will list all addresses from all available network interface.
+	return res, nil
+}
+func (h *FakeNetlinkHandle) GetAllLocalAddresses() (sets.String, error) {
+	res := sets.NewString()
+	// List all addresses from all available network interfaces.
 	for linkName := range h.localAddresses {
-		if linkName == filterDev {
-			continue
-		}
 		// list all addresses from a given network interface.
 		for _, addr := range h.localAddresses[linkName] {
 			res.Insert(addr)
