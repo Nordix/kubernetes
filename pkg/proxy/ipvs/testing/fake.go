@@ -18,6 +18,7 @@ package testing
 
 import (
 	"fmt"
+
 	"k8s.io/utils/net"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -125,10 +126,13 @@ func (h *FakeNetlinkHandle) GetLocalAddresses(dev string) (sets.String, error) {
 	}
 	return res, nil
 }
-func (h *FakeNetlinkHandle) GetAllLocalAddresses() (sets.String, error) {
+func (h *FakeNetlinkHandle) GetFilteredLocalAddresses(dev string) (sets.String, error) {
 	res := sets.NewString()
 	// List all addresses from all available network interfaces.
 	for linkName := range h.localAddresses {
+		if linkName == dev {
+			continue
+		}
 		// list all addresses from a given network interface.
 		for _, addr := range h.localAddresses[linkName] {
 			if h.isValidForSet(addr) {

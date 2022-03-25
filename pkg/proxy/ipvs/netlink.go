@@ -32,12 +32,12 @@ type NetLinkHandle interface {
 	DeleteDummyDevice(devName string) error
 	// ListBindAddress will list all IP addresses which are bound in a given interface
 	ListBindAddress(devName string) ([]string, error)
-	// GetAllLocalAddresses return all local addresses on the node.
-	// Only the addresses of the current family are returned.
-	// IPv6 link-local and loopback addresses are excluded.
-	GetAllLocalAddresses() (sets.String, error)
 	// GetLocalAddresses return all local addresses for an interface.
 	// Only the addresses of the current family are returned.
 	// IPv6 link-local and loopback addresses are excluded.
 	GetLocalAddresses(dev string) (sets.String, error)
+	// GetFilteredLocalAddresses lists all LOCAL type IP addresses from host filtering ips from in filterdev.
+	// Only the addresses of the current family are returned.
+	// IPv6 link-local and loopback addresses are excluded.
+	GetFilteredLocalAddresses(filterDev string) (sets.String, error)
 }

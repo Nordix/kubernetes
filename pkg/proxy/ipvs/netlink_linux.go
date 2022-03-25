@@ -126,15 +126,29 @@ func (h *netlinkHandle) ListBindAddress(devName string) ([]string, error) {
 	return ips, nil
 }
 
-// GetAllLocalAddresses return all local addresses on the node.
+// GetFilteredLocalAddresses lists all LOCAL type IP addresses from host filtering ips from in filterdev.
 // Only the addresses of the current family are returned.
 // IPv6 link-local and loopback addresses are excluded.
-func (h *netlinkHandle) GetAllLocalAddresses() (sets.String, error) {
-	addr, err := net.InterfaceAddrs()
+func (h *netlinkHandle) GetFilteredLocalAddresses(filterDevice string) (sets.String, error) {
+	interfaces, err := net.Interfaces()
 	if err != nil {
-		return nil, fmt.Errorf("Could not get addresses: %v", err)
+		return nil, fmt.Errorf("error listing all interfaces: %v", err)
 	}
-	return utilproxy.AddressSet(h.isValidForSet, addr), nil
+
+	var addressList []net.Addr
+	for _, ifc := range interfaces {
+		if filterDevice == ifc.Name {
+			continue
+		}
+		addresses, err := ifc.Addrs()
+		if err != nil {
+			fmt.Errorf("Cannot get addresses from %s: %v", ifc.Name, err)
+			continue
+		}
+		addressList = append(addressList, addresses...)
+	}
+	return utilproxy.AddressSet(h.isValidForSet, addressList), nil
+
 }
 
 // GetLocalAddresses return all local addresses for an interface.

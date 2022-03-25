@@ -297,20 +297,13 @@ type realIPGetter struct {
 //
 func (r *realIPGetter) NodeIPs() (ips []net.IP, err error) {
 
-	nodeAddress, err := r.nl.GetAllLocalAddresses()
+	nodeAddresses, err := r.nl.GetFilteredLocalAddresses(DefaultDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("error listing LOCAL type addresses from host, error: %v", err)
 	}
 
-	// We must exclude the addresses on the IPVS dummy interface
-	bindedAddress, err := r.BindedIPs()
-	if err != nil {
-		return nil, err
-	}
-	ipset := nodeAddress.Difference(bindedAddress)
-
 	// translate ip string to IP
-	for _, ipStr := range ipset.UnsortedList() {
+	for _, ipStr := range nodeAddresses.UnsortedList() {
 		a := netutils.ParseIPSloppy(ipStr)
 		ips = append(ips, a)
 	}

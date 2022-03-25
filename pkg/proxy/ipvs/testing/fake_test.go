@@ -31,7 +31,7 @@ func TestSetGetLocalAddresses(t *testing.T) {
 	if !reflect.DeepEqual(expected, addr) {
 		t.Errorf("Unexpected mismatch, expected: %v, got: %v", expected, addr)
 	}
-	list, _ := fake.GetAllLocalAddresses()
+	list, _ := fake.GetFilteredLocalAddresses("")
 	if !reflect.DeepEqual(expected, list) {
 		t.Errorf("Unexpected mismatch, expected: %v, got: %v", expected, list)
 	}
@@ -41,7 +41,13 @@ func TestSetGetLocalAddresses(t *testing.T) {
 	if !reflect.DeepEqual(expected, addr) {
 		t.Errorf("Unexpected mismatch, expected: %v, got: %v", expected, addr)
 	}
-	list, _ = fake.GetAllLocalAddresses()
+	list, _ = fake.GetFilteredLocalAddresses("")
+	expected = sets.NewString("1.2.3.4")
+	if !reflect.DeepEqual(expected, list) {
+		t.Errorf("Unexpected mismatch, expected: %v, got: %v", expected, list)
+	}
+	fake.SetLocalAddresses("kube-ipvs0", "192.168.0.1")
+	list, _ = fake.GetFilteredLocalAddresses("kube-ipvs0")
 	expected = sets.NewString("1.2.3.4")
 	if !reflect.DeepEqual(expected, list) {
 		t.Errorf("Unexpected mismatch, expected: %v, got: %v", expected, list)

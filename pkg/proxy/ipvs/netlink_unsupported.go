@@ -61,8 +61,8 @@ func (h *netlinkHandle) ListBindAddress(devName string) ([]string, error) {
 	return nil, fmt.Errorf("netlink is not supported in this platform")
 }
 
-// GetAllLocalAddresses is part of interface.
-func (h *netlinkHandle) GetAllLocalAddresses() (sets.String, error) {
+// GetFilteredLocalAddresses is part of interface.
+func (h *netlinkHandle) GetFilteredLocalAddresses(dev string) (sets.String, error) {
 	return nil, fmt.Errorf("netlink is not supported in this platform")
 }
 
