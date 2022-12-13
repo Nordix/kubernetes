@@ -365,10 +365,18 @@ func (w *AtomicWriter) newTimestampDir() (string, error) {
 		return "", err
 	}
 
-	// 0755 permissions are needed to allow 'group' and 'other' to recurse the
+	// Copy the permissions from target directory to the timestamp directory.
+	// These permissions will also include setgid bit on unix, which guarantees that
+	// new files created inside timestamp dir will inherit correct group owner.
+	perms, err := os.Stat(w.targetDir)
+	if err != nil {
+		klog.Errorf("%s: unable to stat target directory: %v", w.logContext, err)
+		return "", err
+	}
+	// Set permissions to allow 'group' and 'other' to recurse the
 	// directory tree.  do a chmod here to ensure that permissions are set correctly
 	// regardless of the process' umask.
-	err = os.Chmod(tsDir, 0755)
+	err = os.Chmod(tsDir, perms.Mode())
 	if err != nil {
 		klog.Errorf("%s: unable to set mode on new temp directory: %v", w.logContext, err)
 		return "", err
