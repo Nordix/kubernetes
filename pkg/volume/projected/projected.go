@@ -321,11 +321,12 @@ func (s *projectedVolumeMounter) collectData(mounterArgs volume.MounterArgs) (ma
 		case source.ServiceAccountToken != nil:
 			tp := source.ServiceAccountToken
 
-			// When FsGroup is set, we depend on SetVolumeOwnership to
-			// change from 0600 to 0640.
 			mode := *s.source.DefaultMode
-			if mounterArgs.FsUser != nil || mounterArgs.FsGroup != nil {
+			if mounterArgs.FsUser != nil {
 				mode = 0600
+			}
+			if mounterArgs.FsGroup != nil {
+				mode = 0640
 			}
 
 			var auds []string
