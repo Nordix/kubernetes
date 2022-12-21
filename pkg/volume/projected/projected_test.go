@@ -800,7 +800,7 @@ func TestCollectDataWithServiceAccountToken(t *testing.T) {
 			wantPayload: map[string]util.FileProjection{
 				"token": {
 					Data: []byte("test_projected_namespace:foo:3600:[https://api]"),
-					Mode: 0600,
+					Mode: 0640,
 				},
 			},
 		},
@@ -813,7 +813,7 @@ func TestCollectDataWithServiceAccountToken(t *testing.T) {
 			wantPayload: map[string]util.FileProjection{
 				"token": {
 					Data:   []byte("test_projected_namespace:foo:3600:[https://api]"),
-					Mode:   0600,
+					Mode:   0640,
 					FsUser: utilptr.Int64Ptr(1000),
 				},
 			},
