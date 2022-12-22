@@ -322,11 +322,12 @@ func (s *projectedVolumeMounter) collectData(mounterArgs volume.MounterArgs) (ma
 			tp := source.ServiceAccountToken
 
 			mode := *s.source.DefaultMode
-			if mounterArgs.FsUser != nil {
-				mode = 0600
-			}
+			// If fsGroup is set: containers run with fsGroup as supplemental group and access to
+			// token is granted by group read permission.
 			if mounterArgs.FsGroup != nil {
 				mode = 0640
+			} else if mounterArgs.FsUser != nil {
+				mode = 0600
 			}
 
 			var auds []string
