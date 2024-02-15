@@ -309,6 +309,12 @@ func (p *staticPolicy) Allocate(s state.State, pod *v1.Pod, container *v1.Contai
 		}
 	}()
 
+   	if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
+                if numCPUs == 1 {
+			klog.InfoS("Static policy: container already present in state, InPlacePodVerticalScaling attempt, Pod QoS is immutable, skipping", "pod", klog.KObj(pod), "containerName", container.Name)
+			return nil
+                }
+	}
 	if p.options.FullPhysicalCPUsOnly {
 		CPUsPerCore := p.topology.CPUsPerCore()
 		if (numCPUs % CPUsPerCore) != 0 {
@@ -329,6 +335,12 @@ func (p *staticPolicy) Allocate(s state.State, pod *v1.Pod, container *v1.Contai
 
 		availablePhysicalCPUs := p.GetAvailablePhysicalCPUs(s).Size()
 
+		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
+			if cs, ok := podutil.GetContainerStatus(pod.Status.ContainerStatuses, container.Name); ok {
+				cpuAllocatedQuantity := cs.AllocatedResources[v1.ResourceCPU]
+				availablePhysicalCPUs += int(cpuAllocatedQuantity.Value()) % CPUsPerCore
+			}
+		}
 		// It's legal to reserve CPUs which are not core siblings. In this case the CPU allocator can descend to single cores
 		// when picking CPUs. This will void the guarantee of FullPhysicalCPUsOnly. To prevent this, we need to additionally consider
 		// all the core siblings of the reserved CPUs as unavailable when computing the free CPUs, before to start the actual allocation.
@@ -342,9 +354,18 @@ func (p *staticPolicy) Allocate(s state.State, pod *v1.Pod, container *v1.Contai
 		}
 	}
 	if cpuset, ok := s.GetCPUSet(string(pod.UID), container.Name); ok {
-		p.updateCPUsToReuse(pod, container, cpuset)
-		klog.InfoS("Static policy: container already present in state, skipping", "pod", klog.KObj(pod), "containerName", container.Name)
-		return nil
+		if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
+                        cpusInUse := getAssignedCPUsOfSiblings(s, string(pod.UID), container.Name)
+                        s.Delete(string(pod.UID), container.Name)
+			toRelease := cpuset.Difference(cpusInUse)
+                        s.SetDefaultCPUSet(s.GetDefaultCPUSet().Union(toRelease))
+                        p.updateCPUsToReuse(pod, container, cpuset)
+			klog.InfoS("Static policy: container already present in state, InPlacePodVerticalScaling", "pod", klog.KObj(pod), "containerName", container.Name)
+		} else {
+			p.updateCPUsToReuse(pod, container, cpuset)
+			klog.InfoS("Static policy: container already present in state, skipping", "pod", klog.KObj(pod), "containerName", container.Name)
+		        return nil
+		}
 	}
 
 	// Call Topology Manager to get the aligned socket affinity across all hint providers.
@@ -430,15 +451,6 @@ func (p *staticPolicy) guaranteedCPUs(pod *v1.Pod, container *v1.Container) int 
 		return 0
 	}
 	cpuQuantity := container.Resources.Requests[v1.ResourceCPU]
-	// In-place pod resize feature makes Container.Resources field mutable for CPU & memory.
-	// AllocatedResources holds the value of Container.Resources.Requests when the pod was admitted.
-	// We should return this value because this is what kubelet agreed to allocate for the container
-	// and the value configured with runtime.
-	if utilfeature.DefaultFeatureGate.Enabled(features.InPlacePodVerticalScaling) {
-		if cs, ok := podutil.GetContainerStatus(pod.Status.ContainerStatuses, container.Name); ok {
-			cpuQuantity = cs.AllocatedResources[v1.ResourceCPU]
-		}
-	}
 	if cpuQuantity.Value()*1000 != cpuQuantity.MilliValue() {
 		return 0
 	}
