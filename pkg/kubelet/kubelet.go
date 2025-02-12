@@ -1609,6 +1609,7 @@ func (kl *Kubelet) initializeModules() error {
 
 	// Start the certificate manager if it was enabled.
 	if kl.serverCertificateManager != nil {
+		klog.InfoS("Starting server certificate manager")
 		kl.serverCertificateManager.Start()
 	}
 
@@ -1726,6 +1727,7 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		klog.ErrorS(err, "Failed to initialize internal modules")
 		os.Exit(1)
 	}
+	klog.InfoS("[===DEBUG===] Modules initialized")
 
 	if err := kl.cgroupVersionCheck(); err != nil {
 		klog.V(2).InfoS("Warning: cgroup check", "error", err)
@@ -1764,6 +1766,7 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		go kl.fastStaticPodsRegistration(ctx)
 	}
 	go wait.Until(kl.updateRuntimeUp, 5*time.Second, wait.NeverStop)
+	klog.InfoS("[===DEBUG===] Container runtime up")
 
 	// Set up iptables util rules
 	if kl.makeIPTablesUtilChains {

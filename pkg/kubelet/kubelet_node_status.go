@@ -747,11 +747,13 @@ func (kl *Kubelet) setNodeStatus(ctx context.Context, node *v1.Node) {
 func (kl *Kubelet) setLastObservedNodeAddresses(addresses []v1.NodeAddress) {
 	kl.lastObservedNodeAddressesMux.Lock()
 	defer kl.lastObservedNodeAddressesMux.Unlock()
+	klog.V(4).InfoS("[===DEBUG===] Setting last observed node addresses", "addresses", addresses)
 	kl.lastObservedNodeAddresses = addresses
 }
 func (kl *Kubelet) getLastObservedNodeAddresses() []v1.NodeAddress {
 	kl.lastObservedNodeAddressesMux.RLock()
 	defer kl.lastObservedNodeAddressesMux.RUnlock()
+	klog.V(4).InfoS("[===DEBUG===] Getting last observed node addresses", "addresses", kl.lastObservedNodeAddresses)
 	return kl.lastObservedNodeAddresses
 }
 

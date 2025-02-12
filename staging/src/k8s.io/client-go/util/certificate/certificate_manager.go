@@ -427,6 +427,7 @@ func (m *manager) Start() {
 
 		// Don't enter rotateCerts and trigger backoff if we don't even have a template to request yet
 		if m.getTemplate() == nil {
+			m.logf("%s: [===DEBUG===] No certificate template available", m.name)
 			return
 		}
 
@@ -443,6 +444,7 @@ func (m *manager) Start() {
 	}, time.Second, m.stopCh)
 
 	if m.dynamicTemplate {
+		m.logf("%s: [===DEBUG===] Using dynamic template", m.name)
 		go wait.Until(func() {
 			// check if the current template matches what we last requested
 			lastRequestCancel, lastRequestTemplate := m.getLastRequest()
@@ -450,7 +452,9 @@ func (m *manager) Start() {
 			if !m.certSatisfiesTemplate() && !reflect.DeepEqual(lastRequestTemplate, m.getTemplate()) {
 				// if the template is different, queue up an interrupt of the rotation deadline loop.
 				// if we've requested a CSR that matches the new template by the time the interrupt is handled, the interrupt is disregarded.
+				m.logf("%s: [===DEBUG===] CSR template differs", m.name)
 				if lastRequestCancel != nil {
+					m.logf("%s: [===DEBUG===] Canceling old CSR", m.name)
 					// if we're currently waiting on a submitted request that no longer matches what we want, stop waiting
 					lastRequestCancel()
 				}
@@ -539,6 +543,7 @@ func (m *manager) rotateCerts() (bool, error) {
 		}
 		return false, nil
 	}
+	m.logf("%s: [===DEBUG===] Generated CSR", m.name)
 
 	// request the client each time
 	clientSet, err := m.getClientset()
@@ -549,6 +554,7 @@ func (m *manager) rotateCerts() (bool, error) {
 		}
 		return false, nil
 	}
+	m.logf("%s: [===DEBUG===] Got ClientSet for CSR, sending to API", m.name)
 
 	getUsages := m.getUsages
 	if m.getUsages == nil {
@@ -563,9 +569,11 @@ func (m *manager) rotateCerts() (bool, error) {
 		if m.certificateRenewFailure != nil {
 			m.certificateRenewFailure.Inc()
 		}
+		m.logf("%s: [===DEBUG===] Got error from CSR: %w", m.name, err)
 		return false, m.updateServerError(err)
 	}
 
+	m.logf("%s: [===DEBUG===] CSR submitted successfully, now waiting for approval", m.name)
 	ctx, cancel := context.WithTimeout(context.Background(), certificateWaitTimeout)
 	defer cancel()
 
@@ -583,6 +591,7 @@ func (m *manager) rotateCerts() (bool, error) {
 		return false, nil
 	}
 
+	m.logf("%s: [===DEBUG===] Updating cert on disk", m.name)
 	cert, err := m.certStore.Update(crtPEM, keyPEM)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("%s: Unable to store the new cert/key pair: %v", m.name, err))

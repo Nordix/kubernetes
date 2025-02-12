@@ -604,6 +604,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if err := options.ValidateKubeletServer(s); err != nil {
 		return err
 	}
+	klog.InfoS("[===DEBUG===] KubeletServer validated")
 
 	// Warn if MemoryQoS enabled with cgroups v1
 	if utilfeature.DefaultFeatureGate.Enabled(features.MemoryQoS) &&
@@ -643,12 +644,14 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if len(s.KubeConfig) > 0 {
 		standaloneMode = false
 	}
+	klog.InfoS("[===DEBUG===] Standalone Mode", "standaloneMode", standaloneMode)
 
 	if kubeDeps == nil {
 		kubeDeps, err = UnsecuredDependencies(s, featureGate)
 		if err != nil {
 			return err
 		}
+		klog.InfoS("[===DEBUG===] UnsecuredDependencies created")
 	}
 
 	if kubeDeps.Cloud == nil {
@@ -667,6 +670,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if err != nil {
 		return err
 	}
+	klog.InfoS("[===DEBUG===] Host and node names", "hostName", hostName, "nodeName", nodeName)
 
 	// if in standalone mode, indicate as much by setting all clients to nil
 	switch {
@@ -677,6 +681,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		klog.InfoS("Standalone mode, no API client")
 
 	case kubeDeps.KubeClient == nil, kubeDeps.EventClient == nil, kubeDeps.HeartbeatClient == nil:
+		klog.InfoS("[===DEBUG===] Setting up API clients")
 		clientConfig, onHeartbeatFailure, err := buildKubeletClientConfig(ctx, s, kubeDeps.TracerProvider, nodeName)
 		if err != nil {
 			return err
@@ -717,6 +722,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	}
 
 	if kubeDeps.Auth == nil {
+		klog.InfoS("[===DEBUG===] Setting up Auth")
 		auth, runAuthenticatorCAReload, err := BuildAuth(nodeName, kubeDeps.KubeClient, s.KubeletConfiguration)
 		if err != nil {
 			return err
@@ -728,6 +734,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if err := kubelet.PreInitRuntimeService(&s.KubeletConfiguration, kubeDeps); err != nil {
 		return err
 	}
+	klog.InfoS("[===DEBUG===] PreInitRuntimeService completed")
 
 	// Get cgroup driver setting from CRI
 	if utilfeature.DefaultFeatureGate.Enabled(features.KubeletCgroupDriverFromCRI) {

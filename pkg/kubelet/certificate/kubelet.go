@@ -159,6 +159,7 @@ func addressesToHostnamesAndIPs(addresses []v1.NodeAddress) (dnsNames []string, 
 	seenDNSNames := map[string]bool{}
 	seenIPs := map[string]bool{}
 	for _, address := range addresses {
+		klog.V(4).InfoS("[===DEBUG===] Processing address", "address", address)
 		if len(address.Address) == 0 {
 			continue
 		}
@@ -189,6 +190,7 @@ func addressesToHostnamesAndIPs(addresses []v1.NodeAddress) (dnsNames []string, 
 	// return in stable order
 	sort.Strings(dnsNames)
 	sort.Slice(ips, func(i, j int) bool { return ips[i].String() < ips[j].String() })
+	klog.V(4).InfoS("[===DEBUG===] Finished processing addresses", "dnsNames", dnsNames, "ips", ips)
 
 	return dnsNames, ips
 }
