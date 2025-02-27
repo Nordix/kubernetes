@@ -78,6 +78,9 @@ type SecureServingOptions struct {
 
 	// PermitAddressSharing controls if SO_REUSEADDR is used when binding the port.
 	PermitAddressSharing bool
+
+	// Certificate revocation list filename
+	CertificateRevocationList string
 }
 
 type CertKey struct {
@@ -218,6 +221,9 @@ func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet) {
 		"If true, SO_REUSEADDR will be used when binding the port. This allows binding "+
 			"to wildcard IPs like 0.0.0.0 and specific IPs in parallel, and it avoids waiting "+
 			"for the kernel to release sockets in TIME_WAIT state. [default=false]")
+	fs.StringVar(&s.CertificateRevocationList, "certificate-revocation-list", "", ""+
+		"Path to local certificate revocation list. If provided, clients providing a certificate listed in the "+
+		"file will be rejected")
 }
 
 // ApplyTo fills up serving information in the server configuration.
@@ -262,6 +268,7 @@ func (s *SecureServingOptions) ApplyTo(config **server.SecureServingInfo) error 
 		Listener:                     s.Listener,
 		HTTP2MaxStreamsPerConnection: s.HTTP2MaxStreamsPerConnection,
 		DisableHTTP2:                 s.DisableHTTP2Serving,
+		CertificateRevocationList:    s.CertificateRevocationList,
 	}
 	c := *config
 
@@ -334,6 +341,12 @@ func (s *SecureServingOptions) ApplyTo(config **server.SecureServingInfo) error 
 	}
 	c.SNICerts = namedTLSCerts
 
+	// check crl file exists if crl is set
+	if len(s.CertificateRevocationList) > 0 {
+		if _, err := certutil.CertificateRevocationListFromFile(s.CertificateRevocationList); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

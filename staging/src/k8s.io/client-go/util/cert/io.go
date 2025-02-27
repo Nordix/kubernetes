@@ -44,6 +44,16 @@ func CanReadCertAndKey(certPath, keyPath string) (bool, error) {
 	return true, nil
 }
 
+// CertificateRevocationListFromFile returns true if the CRL file already exists,
+// otherwise returns false.
+func CertificateRevocationListFromFile(crlFilePath string) (bool, error) {
+	crlReadable := canReadFile(crlFilePath)
+	if crlReadable == false {
+		return false, nil
+	}
+	return true, nil
+}
+
 // If the file represented by path exists and
 // readable, returns true otherwise returns false.
 func canReadFile(path string) bool {
