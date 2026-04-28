@@ -2586,6 +2586,8 @@ var defaultKubernetesFeatureGateDependencies = map[featuregate.Feature][]feature
 
 	PodSchedulingReadiness: {},
 
+	PodStartingOrderByPriority: {},
+
 	PodTopologyLabelsAdmission: {},
 
 	PodsAPI: {},

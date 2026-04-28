@@ -19,6 +19,7 @@ package e2enode
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -118,7 +119,7 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 
 		ginkgo.By("Create low-priority pods")
 		lowPrioPods := []*v1.Pod{}
-		for i := 0; i < podAmount; i++ {
+		for i := range podAmount {
 			lowPrioPods = append(lowPrioPods, getPodWithPriorityAndResources(fmt.Sprintf("priority-low-%d", i), nodeName, customPriorityClassLow.Name, v1.ResourceRequirements{}))
 		}
 		e2epod.NewPodClient(f).CreateBatch(ctx, lowPrioPods)
@@ -137,13 +138,13 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 				}
 			}
 			return nil
-		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(gomega.BeNil())
+		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(gomega.Succeed())
 
 		ginkgo.By("Create high-priority pods once low priority pods are running")
 		// Wait to ensure low-priority pods have older creation timestamps.
 		time.Sleep(5 * time.Second)
 		highPrioPods := []*v1.Pod{}
-		for i := 0; i < podAmount; i++ {
+		for i := range podAmount {
 			highPrioPods = append(highPrioPods, getPodWithPriorityAndResources(fmt.Sprintf("priority-high-%d", i), nodeName, customPriorityClassHigh.Name, v1.ResourceRequirements{}))
 		}
 		e2epod.NewPodClient(f).CreateBatch(ctx, highPrioPods)
@@ -162,7 +163,7 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 				}
 			}
 			return nil
-		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(gomega.BeNil())
+		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(gomega.Succeed())
 
 		ginkgo.By("Stopping the kubelet")
 		restartKubelet := mustStopKubelet(ctx, f)
@@ -207,7 +208,7 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 				return fmt.Errorf("waiting for all pods to reach Running state, current: %d/%d", runningCount, podTotal)
 			}
 			return nil
-		}).WithTimeout(5 * time.Minute).WithPolling(time.Second).Should(gomega.BeNil())
+		}).WithTimeout(5 * time.Minute).WithPolling(time.Second).Should(gomega.Succeed())
 
 		ginkgo.By("Querying CRI for sandbox creation timestamps (nanosecond precision)")
 		// Re-acquire CRI client after kubelet restart.
@@ -278,8 +279,8 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 		gomega.Expect(highTimestamps).To(gomega.HaveLen(podAmount), "expected all high-priority sandboxes")
 		gomega.Expect(lowTimestamps).To(gomega.HaveLen(podAmount), "expected all low-priority sandboxes")
 
-		sort.Slice(highTimestamps, func(i, j int) bool { return highTimestamps[i] < highTimestamps[j] })
-		sort.Slice(lowTimestamps, func(i, j int) bool { return lowTimestamps[i] < lowTimestamps[j] })
+		slices.Sort(highTimestamps)
+		slices.Sort(lowTimestamps)
 
 		// Use median timestamps to compare start order. Median is more robust than
 		// comparing min/max since a few pods may overlap due to concurrent sandbox creation.
@@ -314,7 +315,7 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 
 		ginkgo.By("Creating low-priority pods that fill ~70% of CPU")
 		lowPrioPods := []*v1.Pod{}
-		for i := 0; i < numLowPrioPods; i++ {
+		for i := range numLowPrioPods {
 			lowPrioPods = append(lowPrioPods, getPodWithPriorityAndResources(
 				fmt.Sprintf("cpu-low-%d", i), nodeName, customPriorityClassLow.Name,
 				v1.ResourceRequirements{
@@ -437,7 +438,7 @@ var _ = SIGDescribe("Pod Restart with PodStartingOrderByPriority Featuregate", f
 
 		ginkgo.By("Creating low-priority pods that fill ~70% of CPU")
 		lowPrioPods := []*v1.Pod{}
-		for i := 0; i < numLowPrioPods; i++ {
+		for i := range numLowPrioPods {
 			lowPrioPods = append(lowPrioPods, getPodWithPriorityAndResources(
 				fmt.Sprintf("critical-low-%d", i), nodeName, customPriorityClassLow.Name,
 				v1.ResourceRequirements{
